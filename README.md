@@ -6,4 +6,5 @@ Connected components can be computed in parallel for different Jaccard similarit
 ##Dependencies
 
 https://github.com/ekzhu/datasketch
+
     pip2.7 install datasketch -U
