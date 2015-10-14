@@ -50,34 +50,26 @@ def get_bandwidth(n, tr):
 
 
 def connected(seed,lshdict,doc2lsh,t):
-    stk=[]
-    sigs=doc2lsh[seed]
-    #get lsh band signatures for seed and 
-    #find match candidates
+    '''
+    Computes clusters based on the lsh bucket candidates.
+    We do not actually check the full connected component. 
+    We only check for similar docs amongst the lsh candidates for each cluster member.
+    '''
     cluster=set([seed])
     #get candidates and flatten list
-    candidates=set(itertools.chain.from_iterable([lshdict[sig] for sig in doc2lsh[seed]]))
-    done=candidates
-    stk=candidates
-    if len(stk) > 1:#candidates contain more than seed itself
-        while len(stk)>0:
-            cand=stk.pop()
-            if cand in cluster:continue#don't check if we've already seen this 
-            m1=hashcorp[cand]
-            e=0
-            for doc in cluster:
-                m2=hashcorp[doc]
-                if m2.jaccard(m1) >=t:
-                    e=1
-                    break
-                    #we could break here if we just needed the connected component. But we need the full number of edges so we'll continue.
-            if e>0:
+    base=set([seed])
+    while len(base)>0:
+        s=base.pop()
+        #get candidates and flatten list
+        candidates=set(itertools.chain.from_iterable([lshdict[sig] for sig in doc2lsh[s]]))
+        m1=hashcorp[s]
+        for cand in candidates:
+            if cand in cluster:continue#don't check if we've already added this
+            m2=hashcorp[cand]
+            if m2.jaccard(m1) >=t:
                 cluster.add(cand)
-                candidates=set(itertools.chain.from_iterable([lshdict[sig] for sig in doc2lsh[cand]]))
-                #update stk with candidates that haven't been seen yet. 
-                stk.update(candidates.difference(done))
-                done.update(candidates)
-    #all candidates have been checked, full connected component is resolved. 
+                base.add(cand)
+    #all candidates have been checked 
     return cluster 
     
 def compute_clusters(obj):
@@ -108,45 +100,36 @@ def compute_clusters(obj):
     #compute connected components
     start_time = time.time()
     doc2cluster={}
-    cluster_info={}
     count=0
 
     for doc in hashcorp:
         if doc not in doc2cluster:
-            cl,ed=connected(doc,lsh_dict,doc_to_lsh,thr)
+            cl=connected(doc,lsh_dict,doc_to_lsh,thr)
             doc2cluster.update({i:count for i in cl })
-            cluster_info[count]=(len(cl),ed)
             count+=1
     print("Computing connected components for threshold: "+str(thr)+" took\n--- %s seconds ---\n" % (time.time() - start_time))
         
     print "write results to file"
     start_time = time.time()
-    f=open('outV3/ad2cluster_'+num_lines+'_'+str(thr)+'_'+'.csv','w')
-    f.write('ad,cluster\n')
-    for key, value in ad2cluster.iteritems():
+    f=open(outdir+'/doc2cluster_'+str(thr)+'_'+suffix+'.csv','w')
+    f.write('line,cluster\n')
+    for key, value in doc2cluster.iteritems():
         f.write(str(key)+','+str(value)+'\n')
-    f.close()
-    f=open('outV3/cluster_info_'+num_lines+'_'+str(thr)+'.csv','w')
-    f.write('cluster,size,edges\n')
-    for key, value in cluster_info.iteritems():
-        f.write(str(key)+','+','.join(map(str,value))+'\n')
     f.close()
     print("Writing results to files for threshold "+str(thr)+" took:\n--- %s seconds ---\n" % (time.time() - start_time))
     
                 
 #Set up command line arguments
-parser = argparse.ArgumentParser(description='run minhash ER experiment with given threshold')
+parser = argparse.ArgumentParser(description='Calculate connected components of documents with given threshold(s)')
 parser.add_argument("-t", dest="threshold",type=float,help="threshold for ER", metavar="T")
 parser.add_argument("-lt", dest="lt",type=float,help="lower threshold for ER", metavar="TL")
 parser.add_argument("-ut", dest="ut",type=float,help="upper threshold for ER", metavar="TU")
 parser.add_argument("-out", dest="out",help="output directory", metavar="OUT")
 parser.add_argument("-steps", dest="steps",type=float,help="number of steps between lower and upper threshold", metavar="TSTEP")
 parser.add_argument("-sigl", dest="num_permutations",type=int,help="minhash signature length", metavar="SIG")
-parser.add_argument("-s", dest="suffix",help="file suffix", metavar="S")
+parser.add_argument("-suff", dest="suffix",help="output file suffix", metavar="S")
 parser.add_argument("-infile", dest="infile",help="input file",required=True, metavar="IF")
-parser.add_argument('-match', dest='match', action='store_true')
 parser.add_argument('-header', dest='header', action='store_true')
-parser.add_argument("-numl", dest="num_lines", required=False,help="number of lines to use", metavar="NUML")
 parser.add_argument("-p", dest="nump", required=False,type=int,help="number of processes for multithreading", metavar="NUMP")
 parser.set_defaults(match=False)
 parser.set_defaults(header=True)
@@ -163,10 +146,7 @@ if __name__ == "__main__":
     #fetch command line arguments
     args = parser.parse_args()
     num_processes=args.nump
-    calc_match=args.match
-    calc_clusters=args.clusters
     suffix=args.suffix
-    num_lines=args.num_lines
     num_permutations=args.num_permutations#length of minhash signature
 
     #create output directory if it does not exist
@@ -211,8 +191,13 @@ if __name__ == "__main__":
         for token in doc: m.digest(sha1(token))
         hashcorp[key]=m
     print("--- %s seconds ---" % (time.time() - start_time))
-
-    p=Pool(num_processes)
-    assignment=[ (x,) for x in thresholds]
-    p.map(compute_clusters,assignment)
+    if num_processes> 1:
+        if len(thresholds)<num_processes:
+            num_processes=len(thresholds)
+        p=Pool(num_processes)
+        assignment=[ (x,) for x in thresholds]
+        p.map(compute_clusters,assignment)
+    else:
+        for x in thresholds:
+            compute_clusters((x,))
 
