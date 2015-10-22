@@ -1,17 +1,9 @@
 # -*- coding: utf-8 -*-
-import time
-import os,sys
 import itertools
 import math
-import argparse
 import numpy as np
-from multiprocessing import Pool
 from hashlib import sha1
-from datasketch import MinHash
-import random, struct
-from random import sample,choice
-from sklearn import metrics
-from zlib import crc32
+import random
 NUM_PERM=100
 
 
