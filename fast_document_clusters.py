@@ -19,14 +19,14 @@ from sklearn import metrics
 
 def get_clusters(fn):
     with open(fn,'r') as f:
-        f.next()#skip header
+        next(f)#skip header
         for line in f:
             a=line.split(',')
             yield a[0],a[2]
 
 def get_lsh(sig,nbands):
     for i,band in enumerate(np.array_split(sig,nbands)):
-        yield sha1("ab" + unicode(band) + "ba"+unicode(i)).digest()
+        yield sha1("ab" + str(band) + "ba"+str(i)).digest()
          
 def get_bandwidth(n, tr):
         """
@@ -37,7 +37,7 @@ def get_bandwidth(n, tr):
         """
         best = n, 1
         minerr  = float("inf")
-        for r in xrange(1, n + 1):
+        for r in range(1, n + 1):
             try:
                 b = 1. / (tr ** r)
             except: 
@@ -76,14 +76,14 @@ def compute_clusters(obj):
     thr=obj[0]
     bandwidth=get_bandwidth(num_permutations, thr)#r
     bands=int(math.ceil(float(num_permutations)/float(bandwidth)))#b
-    print "starting calculations for threshold "+str(thr)+"\nnumber of lsh bands: "+str(bands)
+    print("starting calculations for threshold "+str(thr)+"\nnumber of lsh bands: "+str(bands))
     sys.stdout.flush()
 
     start_time = time.time()
     doc_to_lsh={}
     lsh_dict={}
 
-    for key,m in hashcorp.iteritems():
+    for key,m in hashcorp.items():
         #compute lsh 
         signatures = [sig for sig in get_lsh(m.hashvalues,bands)]
         #store signatures for this document
@@ -94,7 +94,7 @@ def compute_clusters(obj):
                 lsh_dict[sig].append(key)
             else:
                 lsh_dict[sig]=[key]
-    print("Calculating lsh signatures for threshold "+str(thr)+" took\n ---%s seconds ---\n" % (time.time() - start_time))
+    print(("Calculating lsh signatures for threshold "+str(thr)+" took\n ---%s seconds ---\n" % (time.time() - start_time)))
     sys.stdout.flush()
 
     #compute connected components
@@ -107,16 +107,16 @@ def compute_clusters(obj):
             cl=connected(doc,lsh_dict,doc_to_lsh,thr)
             doc2cluster.update({i:count for i in cl })
             count+=1
-    print("Computing connected components for threshold: "+str(thr)+" took\n--- %s seconds ---\n" % (time.time() - start_time))
+    print(("Computing connected components for threshold: "+str(thr)+" took\n--- %s seconds ---\n" % (time.time() - start_time)))
         
-    print "write results to file"
+    print("write results to file")
     start_time = time.time()
     f=open(outdir+'/doc2cluster_'+str(thr)+'_'+suffix+'.csv','w')
     f.write('line,cluster\n')
-    for key, value in doc2cluster.iteritems():
+    for key, value in doc2cluster.items():
         f.write(str(key)+','+str(value)+'\n')
     f.close()
-    print("Writing results to files for threshold "+str(thr)+" took:\n--- %s seconds ---\n" % (time.time() - start_time))
+    print(("Writing results to files for threshold "+str(thr)+" took:\n--- %s seconds ---\n" % (time.time() - start_time)))
     
                 
 #Set up command line arguments
@@ -162,24 +162,24 @@ if __name__ == "__main__":
         thresholds=[args.threshold]
     else:
         if None in [lt,ut,steps]: 
-            print "need lower threshold, upper threshold, and number of steps"
+            print("need lower threshold, upper threshold, and number of steps")
             exit()
         else:
             thresholds=np.linspace(lt, ut, num=steps)
 
     #load text. Flat file for now
-    print 'load text'
+    print('load text')
     start_time = time.time()
     with open(args.infile,'r') as f:
         if args.header:
-            f.next()
+            next(f)
         #TODO test robustness
         #mycorpus=[(i,set(line.encode('utf8', 'ignore').lower().split())) for i,line in enumerate(f)]
         mycorpus=[(i,set(line.lower().split())) for i,line in enumerate(f)]
 
-    print("--- %s seconds ---" % (time.time() - start_time))
+    print(("--- %s seconds ---" % (time.time() - start_time)))
 
-    print 'Calculate minhash signatures'
+    print('Calculate minhash signatures')
     start_time = time.time()
 
     #prepare dictionary of hashes
@@ -190,7 +190,7 @@ if __name__ == "__main__":
         m=MinHash(num_perm=num_permutations)
         for token in doc: m.digest(sha1(token))
         hashcorp[key]=m
-    print("--- %s seconds ---" % (time.time() - start_time))
+    print(("--- %s seconds ---" % (time.time() - start_time)))
     if num_processes> 1:
         if len(thresholds)<num_processes:
             num_processes=len(thresholds)
