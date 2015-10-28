@@ -26,9 +26,9 @@ def get_permuted_hashes(token):
     return np.bitwise_and((A * hv + B) % M_PRIME,MAX_HASH)
 
 def get_lsh(sig,nbands):
-    for i,band in enumerate(np.array_split(sig,nbands)):
-        yield sha1("ab" + unicode(band) + "ba"+unicode(i)).digest()
-         
+    for i, band in enumerate(np.array_split(sig,nbands)):
+        yield sha1(("ab" + str(band) + "ba"+str(i)).encode('utf-8')).digest()
+
 def get_bandwidth(n, tr):
         """
         Threshold tr = (1/b) ** (1/r) where
@@ -38,7 +38,7 @@ def get_bandwidth(n, tr):
         """
         best = n, 1
         minerr  = float("inf")
-        for r in xrange(1, n + 1):
+        for r in range(1, n + 1):
             try:
                 b = 1. / (tr ** r)
             except: 
