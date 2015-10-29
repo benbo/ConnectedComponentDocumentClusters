@@ -114,15 +114,9 @@ def near_duplicates(seed,lshdict,doc2lsh,t):
     
 def compute_clusters(obj):
     thr=obj[0]
-<<<<<<< HEAD
     bandwidth=get_bandwidth(NUM_PERM, thr)#r
     bands=int(math.ceil(float(NUM_PERM)/float(bandwidth)))#b
-    print "starting calculations for threshold "+str(thr)+"\nnumber of lsh bands: "+str(bands)
-=======
-    bandwidth=get_bandwidth(num_permutations, thr)#r
-    bands=int(math.ceil(float(num_permutations)/float(bandwidth)))#b
     print("starting calculations for threshold "+str(thr)+"\nnumber of lsh bands: "+str(bands))
->>>>>>> 14b2ebaee69e7666ec6d42ac3c2479f3be66d829
     sys.stdout.flush()
 
     start_time = time.time()
@@ -241,17 +235,11 @@ if __name__ == "__main__":
         #compute minhash signature
         hashvalues=np.empty(NUM_PERM)
         hashvalues.fill(MAX_HASH)
-        for token in doc: m.digest(sha1(token))
-<<<<<<< HEAD
         for token in doc:
             #np.minimum(get_permuted_hashes(token.encode('utf-8','ignore')), hashvalues)
             np.minimum(get_permuted_hashes(token), hashvalues)
         hashcorp[key]=hashvalues
-    print("--- %s seconds ---" % (time.time() - start_time))
-=======
-        hashcorp[key]=m
     print(("--- %s seconds ---" % (time.time() - start_time)))
->>>>>>> 14b2ebaee69e7666ec6d42ac3c2479f3be66d829
     if num_processes> 1:
         if len(thresholds)<num_processes:
             num_processes=len(thresholds)
