@@ -7,15 +7,34 @@ import argparse
 import numpy as np
 from multiprocessing import Pool
 from hashlib import sha1
-from datasketch import MinHash
 import random, struct
 from random import sample,choice
 from sklearn import metrics
 
+#we truncate sha1 for now. We should probably replace this with a proper hash function.
+M_PRIME = (1 << 89) - 1 #(x << n) is x shifted left by n bit
+MAX_HASH = (1 << 64) - 1
+
+NUM_PERM=100
+random.seed(427)
+A,B = np.array([(random.randint(1, M_PRIME),random.randint(0, M_PRIME)) for _ in range(NUM_PERM)]).T
 
 #############
 # functions #
 #############
+
+def set_permutations(numperm):
+    NUM_PERM=numperm
+    A,B = np.array([(random.randint(1, M_PRIME),random.randint(0, M_PRIME)) for _ in range(NUM_PERM)]).T
+
+
+def get_permuted_hashes(token):
+    # get a hash value
+    #abusing sha1 and truncating to 12 digit number
+    hv=int(sha1(token).hexdigest(),16)% (10 ** 12)
+    #do Carter and Wegman like hashing.
+    return np.bitwise_and((A * hv + B) % M_PRIME,MAX_HASH)
+
 
 def get_clusters(fn):
     with open(fn,'r') as f:
@@ -66,16 +85,37 @@ def connected(seed,lshdict,doc2lsh,t):
         for cand in candidates:
             if cand in cluster:continue#don't check if we've already added this
             m2=hashcorp[cand]
-            if m2.jaccard(m1) >=t:
+            if jaccard(m1,m2) >=t:
                 cluster.add(cand)
                 base.add(cand)
     #all candidates have been checked 
     return cluster 
+
+def jaccard(h1,h2):
+    '''
+    Compute jaccard similarity between two minhash signatures.
+    Make sure to only compute jaccard similarity for hashes created with same hash functions (i.e. same seed for random permutation)
+    '''
+    return np.float(np.count_nonzero(h1==h2)) /np.float(h2.size)
+
+def near_duplicates(seed,lshdict,doc2lsh,t):
+    cluster=set([seed])
+    #get candidates and flatten list
+    candidates=set(itertools.chain.from_iterable([lshdict[sig] for sig in doc2lsh[seed]]))
+    m1=hashcorp[seed]
+    for cand in candidates:
+        if cand in cluster:continue#don't check if we've already added this
+        m2=hashcorp[cand]
+        if jaccard(m2,m1) >=t:
+            cluster.add(cand)
+    #all candidates have been checked 
+    return cluster
+
     
 def compute_clusters(obj):
     thr=obj[0]
-    bandwidth=get_bandwidth(num_permutations, thr)#r
-    bands=int(math.ceil(float(num_permutations)/float(bandwidth)))#b
+    bandwidth=get_bandwidth(NUM_PERM, thr)#r
+    bands=int(math.ceil(float(NUM_PERM)/float(bandwidth)))#b
     print "starting calculations for threshold "+str(thr)+"\nnumber of lsh bands: "+str(bands)
     sys.stdout.flush()
 
@@ -85,7 +125,7 @@ def compute_clusters(obj):
 
     for key,m in hashcorp.iteritems():
         #compute lsh 
-        signatures = [sig for sig in get_lsh(m.hashvalues,bands)]
+        signatures = [sig for sig in get_lsh(m,bands)]
         #store signatures for this document
         doc_to_lsh[key]=signatures
         #store lsh signature to key
@@ -96,6 +136,8 @@ def compute_clusters(obj):
                 lsh_dict[sig]=[key]
     print("Calculating lsh signatures for threshold "+str(thr)+" took\n ---%s seconds ---\n" % (time.time() - start_time))
     sys.stdout.flush()
+
+    
 
     #compute connected components
     start_time = time.time()
@@ -130,9 +172,11 @@ parser.add_argument("-sigl", dest="num_permutations",type=int,help="minhash sign
 parser.add_argument("-suff", dest="suffix",help="output file suffix", metavar="S")
 parser.add_argument("-infile", dest="infile",help="input file",required=True, metavar="IF")
 parser.add_argument('-header', dest='header', action='store_true')
+parser.add_argument('-near_dups', dest='near_dups',help="Do near duplicate detection. If this is not set, connected components will be computed", action='store_true')
 parser.add_argument("-p", dest="nump", required=False,type=int,help="number of processes for multithreading", metavar="NUMP")
 parser.set_defaults(match=False)
 parser.set_defaults(header=True)
+parser.set_defaults(near_dups=True)
 parser.set_defaults(threshold=None)
 parser.set_defaults(num_permutations=100)
 parser.set_defaults(lt=0.0)
@@ -147,7 +191,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     num_processes=args.nump
     suffix=args.suffix
-    num_permutations=args.num_permutations#length of minhash signature
+    if NUM_PERM!=args.num_permutations:
+        set_permutations(args.num_permutations)
 
     #create output directory if it does not exist
     outdir=args.out
@@ -156,6 +201,7 @@ if __name__ == "__main__":
 
     thresholds=[]
     lt=args.lt
+    near_dups=args.near_dups
     ut=args.ut
     steps=args.steps
     if args.threshold is not None:
@@ -187,9 +233,13 @@ if __name__ == "__main__":
     #compute hashes
     for key,doc in mycorpus:
         #compute minhash signature
-        m=MinHash(num_perm=num_permutations)
+        hashvalues=np.empty(NUM_PERM)
+        hashvalues.fill(MAX_HASH)
         for token in doc: m.digest(sha1(token))
-        hashcorp[key]=m
+        for token in doc:
+            #np.minimum(get_permuted_hashes(token.encode('utf-8','ignore')), hashvalues)
+            np.minimum(get_permuted_hashes(token), hashvalues)
+        hashcorp[key]=hashvalues
     print("--- %s seconds ---" % (time.time() - start_time))
     if num_processes> 1:
         if len(thresholds)<num_processes:
