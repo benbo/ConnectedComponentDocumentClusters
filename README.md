@@ -1,5 +1,5 @@
 # FastDocumentClusters
-Compute fast document clusters for text data using MinHash.
+Compute fast connected components for text data using MinHash.
 
 Clusters can be computed in parallel for different Jaccard similarity thresholds. The parallel implementation however is naive and potentially requires lots of memory.  
 
